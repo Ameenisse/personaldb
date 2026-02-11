@@ -1,0 +1,186 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { parsePersonText, type ParsedPerson } from "@/lib/parsePersonText";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { ClipboardPaste, Save, ArrowLeft } from "lucide-react";
+
+const empty: ParsedPerson = { id_no: "", name: "", dob: "", sex: "", contact: "", building: "", atoll: "", island: "", address_full: "" };
+
+const CompletedPage = () => {
+  const navigate = useNavigate();
+  const [rawText, setRawText] = useState("");
+  const [form, setForm] = useState<ParsedPerson>(empty);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const photoBoxRef = useRef<HTMLDivElement>(null);
+
+  const handleParse = () => {
+    const parsed = parsePersonText(rawText);
+    setForm(parsed);
+  };
+
+  const handlePaste = useCallback((e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          setPhoto(file);
+          setPhotoPreview(URL.createObjectURL(file));
+        }
+        return;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = photoBoxRef.current;
+    if (!el) return;
+    el.addEventListener("paste", handlePaste as EventListener);
+    return () => el.removeEventListener("paste", handlePaste as EventListener);
+  }, [handlePaste]);
+
+  // Also listen globally for paste when photo box is focused
+  useEffect(() => {
+    document.addEventListener("paste", handlePaste as EventListener);
+    return () => document.removeEventListener("paste", handlePaste as EventListener);
+  }, [handlePaste]);
+
+  const handleSave = async () => {
+    if (!form.id_no || !form.name) {
+      toast({ title: "Error", description: "ID No and Name are required.", variant: "destructive" });
+      return;
+    }
+
+    setSaving(true);
+
+    // Check duplicate
+    const { data: existing } = await supabase.from("persons").select("id").eq("id_no", form.id_no).maybeSingle();
+    if (existing) {
+      toast({ title: "Duplicate", description: `ID ${form.id_no} already exists.`, variant: "destructive" });
+      setSaving(false);
+      return;
+    }
+
+    // Insert person
+    const { data: person, error: insertErr } = await supabase.from("persons").insert({
+      id_no: form.id_no,
+      name: form.name,
+      dob: form.dob || null,
+      sex: form.sex || null,
+      contact: form.contact || null,
+      building: form.building || null,
+      atoll: form.atoll || null,
+      island: form.island || null,
+      address_full: form.address_full || null,
+    }).select().single();
+
+    if (insertErr || !person) {
+      toast({ title: "Error", description: insertErr?.message || "Insert failed", variant: "destructive" });
+      setSaving(false);
+      return;
+    }
+
+    // Upload photo
+    if (photo) {
+      const path = `persons/${form.id_no}_${Date.now()}.jpg`;
+      const { error: uploadErr } = await supabase.storage.from("person-photos").upload(path, photo, { contentType: photo.type });
+      if (!uploadErr) {
+        await supabase.from("persons").update({ photo_path: path }).eq("id", person.id);
+      }
+    }
+
+    toast({ title: "Success", description: `${form.name} saved successfully.` });
+    setForm(empty);
+    setRawText("");
+    setPhoto(null);
+    setPhotoPreview(null);
+    setSaving(false);
+  };
+
+  const setField = (key: keyof ParsedPerson, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  return (
+    <div className="space-y-4">
+      <Button variant="ghost" onClick={() => navigate("/")}><ArrowLeft className="mr-1 h-4 w-4" /> Back to Search</Button>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Paste Raw Text</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea rows={6} placeholder="Paste person info here…" value={rawText} onChange={(e) => setRawText(e.target.value)} />
+          <Button onClick={handleParse}><ClipboardPaste className="mr-1 h-4 w-4" /> Create Card</Button>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Photo</CardTitle></CardHeader>
+          <CardContent>
+            <div
+              ref={photoBoxRef}
+              tabIndex={0}
+              className="flex min-h-[200px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-input bg-background p-4 text-center text-sm text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {photoPreview ? (
+                <img src={photoPreview} alt="Preview" className="max-h-56 rounded object-cover" />
+              ) : (
+                "Press Ctrl+V / Cmd+V to paste an image"
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Person Details</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1"><Label>ID No</Label><Input value={form.id_no} onChange={(e) => setField("id_no", e.target.value)} /></div>
+            <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setField("name", e.target.value)} /></div>
+            <div className="space-y-1"><Label>DOB</Label><Input type="date" value={form.dob} onChange={(e) => setField("dob", e.target.value)} /></div>
+            <div className="space-y-1">
+              <Label>Sex</Label>
+              <Select value={form.sex} onValueChange={(v) => setField("sex", v)}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1"><Label>Building</Label><Input value={form.building} onChange={(e) => setField("building", e.target.value)} /></div>
+            <div className="space-y-1">
+              <Label>Atoll</Label>
+              <Select value={form.atoll} onValueChange={(v) => setField("atoll", v)}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="R.">R.</SelectItem>
+                  <SelectItem value="B.">B.</SelectItem>
+                  <SelectItem value="K.">K.</SelectItem>
+                  <SelectItem value="L.">L.</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1"><Label>Island</Label><Input value={form.island} onChange={(e) => setField("island", e.target.value)} /></div>
+            <div className="space-y-1"><Label>Contact</Label><Input value={form.contact} onChange={(e) => setField("contact", e.target.value)} /></div>
+            <Button className="w-full" onClick={handleSave} disabled={saving}>
+              <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save to Database"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default CompletedPage;
