@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { differenceInYears } from "date-fns";
+import { differenceInYears, format, parseISO } from "date-fns";
 import { Search, RotateCcw, Plus } from "lucide-react";
 
 type Person = Tables<"persons">;
@@ -158,7 +158,7 @@ const LandingPage = () => {
               <div className="space-y-2 text-sm">
                 <p><span className="font-medium">Name:</span> {selected.name}</p>
                 <p><span className="font-medium">ID No:</span> {selected.id_no}</p>
-                <p><span className="font-medium">DOB:</span> {selected.dob || "N/A"}</p>
+                <p><span className="font-medium">DOB:</span> {selected.dob ? format(parseISO(selected.dob), "dd MMM yyyy") : "N/A"}</p>
                 <p><span className="font-medium">Age:</span> {age !== null ? `${age} years` : "N/A"}</p>
                 <p><span className="font-medium">Sex:</span> {selected.sex || "N/A"}</p>
                 <p><span className="font-medium">Address:</span> {selected.address_full || "N/A"}</p>
