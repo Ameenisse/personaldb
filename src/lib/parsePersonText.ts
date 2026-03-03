@@ -63,29 +63,36 @@ export function parsePersonText(raw: string): ParsedPerson {
   const allNumbers = raw.match(/\b\d{7,10}\b/g);
   if (allNumbers) contact = allNumbers[allNumbers.length - 1];
 
+  // Atoll regex — covers all Maldivian atoll abbreviations
+  const ATOLL_RE = /\b(HA|HDh|Sh|N|R|B|Lh|K|AA|ADh|V|M|F|Dh|Th|L|GA|GDh|Gn|S)\.\s*/i;
+
   // Extract Address (line with comma or atoll tokens)
   for (const line of lines) {
-    if (/,/.test(line) || /\b[RBKL]\.\s*/i.test(line)) {
-      address_full = line;
-      // Normalize: split by comma
-      const parts = line.split(",").map((p) => p.trim());
+    if (/,/.test(line) || ATOLL_RE.test(line)) {
+      // Remove trailing dashes / hyphens
+      const cleaned = line.replace(/[\-–—]+\s*$/, "").trim();
+      address_full = cleaned;
+
+      // Try splitting on comma first
+      const parts = cleaned.split(",").map((p) => p.trim()).filter(Boolean);
       if (parts.length >= 2) {
         building = parts[0];
         const rest = parts.slice(1).join(" ").trim();
-        const atollMatch = rest.match(/\b([RBKL])\./i);
+        const atollMatch = rest.match(ATOLL_RE);
         if (atollMatch) {
           atoll = atollMatch[1].toUpperCase() + ".";
-          island = rest.replace(/\b[RBKL]\.\s*/i, "").trim();
+          island = rest.replace(ATOLL_RE, "").trim();
         } else {
           island = rest;
         }
       } else {
-        const atollMatch = line.match(/\b([RBKL])\./i);
+        // No comma — try splitting on atoll token
+        const atollMatch = cleaned.match(ATOLL_RE);
         if (atollMatch) {
           atoll = atollMatch[1].toUpperCase() + ".";
-          const splitOnAtoll = line.split(/\b[RBKL]\.\s*/i);
-          building = splitOnAtoll[0]?.trim() || "";
-          island = splitOnAtoll[1]?.trim() || "";
+          const splitOnAtoll = cleaned.split(ATOLL_RE);
+          building = splitOnAtoll[0]?.replace(/[,\s]+$/, "").trim() || "";
+          island = splitOnAtoll[2]?.trim() || "";
         }
       }
       break;
