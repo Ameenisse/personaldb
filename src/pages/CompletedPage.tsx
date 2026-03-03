@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft, X } from "lucide-react";
 
 const empty: ParsedPerson = { id_no: "", name: "", dob: "", sex: "", contact: "", building: "", atoll: "", island: "", address_full: "" };
 
@@ -142,6 +142,11 @@ const CompletedPage = () => {
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea rows={6} placeholder="Paste person info here — fields will auto-fill…" value={rawText} onChange={(e) => setRawText(e.target.value)} />
+          {rawText && (
+            <Button variant="outline" size="sm" onClick={() => { setRawText(""); setForm(empty); setExistingId(null); setPhoto(null); setPhotoPreview(null); }}>
+              <X className="mr-1 h-4 w-4" /> Clear
+            </Button>
+          )}
         </CardContent>
       </Card>
 
