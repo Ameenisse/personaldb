@@ -33,10 +33,16 @@ const CompletedPage = () => {
   // Check for existing record when id_no changes
   useEffect(() => {
     const idNo = form.id_no.trim();
-    if (!idNo) { setExistingId(null); return; }
+    if (!idNo) { setExistingId(null); setPhotoPreview(null); setPhoto(null); return; }
     const timeout = setTimeout(async () => {
-      const { data } = await supabase.from("persons").select("id").eq("id_no", idNo).maybeSingle();
+      const { data } = await supabase.from("persons").select("id, photo_path").eq("id_no", idNo).maybeSingle();
       setExistingId(data?.id ?? null);
+      if (data?.photo_path && !photo) {
+        const { data: urlData } = supabase.storage.from("person-photos").getPublicUrl(data.photo_path);
+        if (urlData?.publicUrl) {
+          setPhotoPreview(urlData.publicUrl);
+        }
+      }
     }, 300);
     return () => clearTimeout(timeout);
   }, [form.id_no]);
