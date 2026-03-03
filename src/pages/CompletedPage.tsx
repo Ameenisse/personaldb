@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { ClipboardPaste, Save, ArrowLeft } from "lucide-react";
+import { Save, ArrowLeft } from "lucide-react";
 
 const empty: ParsedPerson = { id_no: "", name: "", dob: "", sex: "", contact: "", building: "", atoll: "", island: "", address_full: "" };
 
@@ -20,12 +20,26 @@ const CompletedPage = () => {
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [existingId, setExistingId] = useState<string | null>(null); // DB uuid if duplicate
   const photoBoxRef = useRef<HTMLDivElement>(null);
 
-  const handleParse = () => {
+  // Auto-parse when rawText changes
+  useEffect(() => {
+    if (!rawText.trim()) return;
     const parsed = parsePersonText(rawText);
     setForm(parsed);
-  };
+  }, [rawText]);
+
+  // Check for existing record when id_no changes
+  useEffect(() => {
+    const idNo = form.id_no.trim();
+    if (!idNo) { setExistingId(null); return; }
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase.from("persons").select("id").eq("id_no", idNo).maybeSingle();
+      setExistingId(data?.id ?? null);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [form.id_no]);
 
   const handlePaste = useCallback((e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
@@ -64,16 +78,7 @@ const CompletedPage = () => {
 
     setSaving(true);
 
-    // Check duplicate
-    const { data: existing } = await supabase.from("persons").select("id").eq("id_no", form.id_no).maybeSingle();
-    if (existing) {
-      toast({ title: "Duplicate", description: `ID ${form.id_no} already exists.`, variant: "destructive" });
-      setSaving(false);
-      return;
-    }
-
-    // Insert person
-    const { data: person, error: insertErr } = await supabase.from("persons").insert({
+    const personData = {
       id_no: form.id_no,
       name: form.name,
       dob: form.dob || null,
@@ -83,12 +88,28 @@ const CompletedPage = () => {
       atoll: form.atoll || null,
       island: form.island || null,
       address_full: form.address_full || null,
-    }).select().single();
+    };
 
-    if (insertErr || !person) {
-      toast({ title: "Error", description: insertErr?.message || "Insert failed", variant: "destructive" });
-      setSaving(false);
-      return;
+    let personId: string;
+
+    if (existingId) {
+      // Update existing
+      const { error: updateErr } = await supabase.from("persons").update(personData).eq("id", existingId);
+      if (updateErr) {
+        toast({ title: "Error", description: updateErr.message, variant: "destructive" });
+        setSaving(false);
+        return;
+      }
+      personId = existingId;
+    } else {
+      // Insert new
+      const { data: person, error: insertErr } = await supabase.from("persons").insert(personData).select().single();
+      if (insertErr || !person) {
+        toast({ title: "Error", description: insertErr?.message || "Insert failed", variant: "destructive" });
+        setSaving(false);
+        return;
+      }
+      personId = person.id;
     }
 
     // Upload photo
@@ -96,15 +117,16 @@ const CompletedPage = () => {
       const path = `persons/${form.id_no}_${Date.now()}.jpg`;
       const { error: uploadErr } = await supabase.storage.from("person-photos").upload(path, photo, { contentType: photo.type });
       if (!uploadErr) {
-        await supabase.from("persons").update({ photo_path: path }).eq("id", person.id);
+        await supabase.from("persons").update({ photo_path: path }).eq("id", personId);
       }
     }
 
-    toast({ title: "Success", description: `${form.name} saved successfully.` });
+    toast({ title: "Success", description: `${form.name} ${existingId ? "updated" : "saved"} successfully.` });
     setForm(empty);
     setRawText("");
     setPhoto(null);
     setPhotoPreview(null);
+    setExistingId(null);
     setSaving(false);
   };
 
@@ -119,8 +141,7 @@ const CompletedPage = () => {
           <CardTitle>Paste Raw Text</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Textarea rows={6} placeholder="Paste person info here…" value={rawText} onChange={(e) => setRawText(e.target.value)} />
-          <Button onClick={handleParse}><ClipboardPaste className="mr-1 h-4 w-4" /> Create Card</Button>
+          <Textarea rows={6} placeholder="Paste person info here — fields will auto-fill…" value={rawText} onChange={(e) => setRawText(e.target.value)} />
         </CardContent>
       </Card>
 
@@ -173,8 +194,11 @@ const CompletedPage = () => {
             </div>
             <div className="space-y-1"><Label>Island</Label><Input value={form.island} onChange={(e) => setField("island", e.target.value)} /></div>
             <div className="space-y-1"><Label>Contact</Label><Input value={form.contact} onChange={(e) => setField("contact", e.target.value)} /></div>
+            {existingId && (
+              <p className="text-sm text-destructive font-medium">⚠ This ID already exists — saving will update the existing record.</p>
+            )}
             <Button className="w-full" onClick={handleSave} disabled={saving}>
-              <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : "Save to Database"}
+              <Save className="mr-1 h-4 w-4" /> {saving ? "Saving…" : existingId ? "Update Database" : "Save to Database"}
             </Button>
           </CardContent>
         </Card>
