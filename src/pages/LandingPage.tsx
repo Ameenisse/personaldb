@@ -83,10 +83,9 @@ const LandingPage = () => {
                 <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="R.">R.</SelectItem>
-                  <SelectItem value="B.">B.</SelectItem>
-                  <SelectItem value="K.">K.</SelectItem>
-                  <SelectItem value="L.">L.</SelectItem>
+                  {["HA.", "HDH.", "SH.", "N.", "R.", "B.", "LH.", "K.", "AA.", "ADH.", "V.", "M.", "F.", "DH.", "TH.", "L.", "GA.", "GDH.", "GN.", "S."].map((a) => (
+                    <SelectItem key={a} value={a}>{a}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
