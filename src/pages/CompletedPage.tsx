@@ -196,7 +196,7 @@ const CompletedPage = () => {
               <Select value={form.atoll} onValueChange={(v) => setField("atoll", v)}>
                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>
-                  {["HA.", "HDh.", "Sh.", "N.", "R.", "B.", "Lh.", "K.", "AA.", "ADh.", "V.", "M.", "F.", "Dh.", "Th.", "L.", "GA.", "GDh.", "Gn.", "S."].map((a) => (
+                  {["HA.", "HDH.", "SH.", "N.", "R.", "B.", "LH.", "K.", "AA.", "ADH.", "V.", "M.", "F.", "DH.", "TH.", "L.", "GA.", "GDH.", "GN.", "S."].map((a) => (
                     <SelectItem key={a} value={a}>{a}</SelectItem>
                   ))}
                 </SelectContent>

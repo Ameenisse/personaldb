@@ -17,6 +17,39 @@ export interface ParsedPerson {
   address_full: string;
 }
 
+/** Parse an address string using the rule: before comma = building, between comma and dot = atoll, after dot = island */
+export function parseAddress(addr: string): { building: string; atoll: string; island: string } {
+  const cleaned = addr.replace(/[\-–—]+\s*$/, "").trim();
+
+  let building = "";
+  let atoll = "";
+  let island = "";
+
+  const commaIdx = cleaned.indexOf(",");
+  if (commaIdx !== -1) {
+    building = cleaned.substring(0, commaIdx).trim();
+    const afterComma = cleaned.substring(commaIdx + 1).trim();
+    // Find the dot that separates atoll from island (e.g. "R. Maduvvari")
+    const dotMatch = afterComma.match(/^([^.]+)\.\s*(.*)/);
+    if (dotMatch) {
+      atoll = dotMatch[1].trim().toUpperCase() + ".";
+      island = dotMatch[2].trim();
+    } else {
+      island = afterComma;
+    }
+  } else {
+    // No comma — check for dot pattern (atoll. island)
+    const dotMatch = cleaned.match(/^(.+?)\s+([A-Za-z]+)\.\s*(.*)/);
+    if (dotMatch) {
+      building = dotMatch[1].trim();
+      atoll = dotMatch[2].trim().toUpperCase() + ".";
+      island = dotMatch[3].trim();
+    }
+  }
+
+  return { building, atoll, island };
+}
+
 export function parsePersonText(raw: string): ParsedPerson {
   const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !JUNK_PATTERNS.test(l));
 
@@ -63,38 +96,17 @@ export function parsePersonText(raw: string): ParsedPerson {
   const allNumbers = raw.match(/\b\d{7,10}\b/g);
   if (allNumbers) contact = allNumbers[allNumbers.length - 1];
 
-  // Atoll regex — covers all Maldivian atoll abbreviations
-  const ATOLL_RE = /\b(HA|HDh|Sh|N|R|B|Lh|K|AA|ADh|V|M|F|Dh|Th|L|GA|GDh|Gn|S)\.\s*/i;
-
-  // Extract Address (line with comma or atoll tokens)
+  // Extract Address: "Building, Atoll. Island"
+  // Rule: before comma = building, between comma and dot = atoll, after dot = island
   for (const line of lines) {
-    if (/,/.test(line) || ATOLL_RE.test(line)) {
-      // Remove trailing dashes / hyphens
+    // Look for lines containing a comma or a dot preceded by a letter
+    if (/,/.test(line) || /[A-Za-z]\./.test(line)) {
       const cleaned = line.replace(/[\-–—]+\s*$/, "").trim();
       address_full = cleaned;
-
-      // Try splitting on comma first
-      const parts = cleaned.split(",").map((p) => p.trim()).filter(Boolean);
-      if (parts.length >= 2) {
-        building = parts[0];
-        const rest = parts.slice(1).join(" ").trim();
-        const atollMatch = rest.match(ATOLL_RE);
-        if (atollMatch) {
-          atoll = atollMatch[1].toUpperCase() + ".";
-          island = rest.replace(ATOLL_RE, "").trim();
-        } else {
-          island = rest;
-        }
-      } else {
-        // No comma — try splitting on atoll token
-        const atollMatch = cleaned.match(ATOLL_RE);
-        if (atollMatch) {
-          atoll = atollMatch[1].toUpperCase() + ".";
-          const splitOnAtoll = cleaned.split(ATOLL_RE);
-          building = splitOnAtoll[0]?.replace(/[,\s]+$/, "").trim() || "";
-          island = splitOnAtoll[2]?.trim() || "";
-        }
-      }
+      const parsed = parseAddress(cleaned);
+      building = parsed.building;
+      atoll = parsed.atoll;
+      island = parsed.island;
       break;
     }
   }
