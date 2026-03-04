@@ -105,8 +105,8 @@ const LandingPage = () => {
             </div>
             <div className="space-y-1">
               <Label>Building</Label>
-              <Select value={filters.building} onValueChange={(v) => setFilters((f) => ({ ...f, building: v }))}>
-                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+              <Select value={filters.building} onValueChange={(v) => setFilters((f) => ({ ...f, building: v }))} disabled={!filters.island || filters.island === "all"}>
+                <SelectTrigger><SelectValue placeholder={!filters.island || filters.island === "all" ? "Select island first" : "All"} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   {buildingsForSelection.map((b) => (
