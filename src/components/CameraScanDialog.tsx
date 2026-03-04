@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Camera, X, RotateCcw } from "lucide-react";
+import { Camera, X, RotateCcw, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ interface CameraScanDialogProps {
 const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: CameraScanDialogProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [captured, setCaptured] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -76,6 +77,28 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
   const retake = () => {
     setCaptured(null);
     // camera will restart via useEffect
+  };
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    stopCamera();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 400;
+        const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setCaptured(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   const scan = async () => {
@@ -158,6 +181,10 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
               <Button onClick={capture}>
                 <Camera className="mr-1 h-4 w-4" /> Capture
               </Button>
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-1 h-4 w-4" /> Upload Photo
+              </Button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
             </>
           ) : (
             <>
