@@ -19,6 +19,7 @@ interface CameraScanDialogProps {
 const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: CameraScanDialogProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [captured, setCaptured] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
