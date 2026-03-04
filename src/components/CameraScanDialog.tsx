@@ -81,42 +81,14 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     canvas.width = w * scale;
     canvas.height = h * scale;
     canvas.getContext("2d")!.drawImage(source, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85);
+    return canvas.toDataURL("image/jpeg", 0.7);
   };
 
-  const capture = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    setCaptured(resizeToCanvas(video));
-    stopCamera();
-  };
-
-  const retake = () => {
-    setCaptured(null);
-    setStatusText("");
-    setElapsed(0);
-  };
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    stopCamera();
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => setCaptured(resizeToCanvas(img));
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  };
-
-  const scan = async () => {
-    if (!captured) return;
+  const scanWithImage = useCallback(async (imageData: string) => {
     setScanning(true);
     setProgress(5);
     setElapsed(0);
-    setStatusText("Preparing photos…");
+    setStatusText("Preparing…");
 
     const startTime = Date.now();
     timerRef.current = setInterval(() => {
@@ -142,22 +114,13 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
 
     try {
       const { data, error } = await supabase.functions.invoke("face-match", {
-        body: { capturedImage: captured, personPhotos: withPhotos },
+        body: { capturedImage: imageData, personPhotos: withPhotos },
       });
 
       stopTimer();
 
-      if (error) {
-        toast.error("Scan failed: " + error.message);
-        setScanning(false);
-        return;
-      }
-
-      if (data?.error) {
-        toast.error(data.error);
-        setScanning(false);
-        return;
-      }
+      if (error) { toast.error("Scan failed: " + error.message); setScanning(false); return; }
+      if (data?.error) { toast.error(data.error); setScanning(false); return; }
 
       setProgress(95);
       setStatusText("Processing results…");
@@ -169,7 +132,7 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
         toast.info("No matching persons found");
       } else {
         const statsMsg = stats
-          ? ` (scanned ${stats.totalPhotos}, ${stats.pass1Candidates} candidates, ${stats.finalMatches} confirmed)`
+          ? ` (${stats.totalPhotos} photos, ${stats.finalMatches} confirmed)`
           : "";
         toast.success(`Found ${matchedIds.length} match(es)${statsMsg}`);
       }
@@ -184,7 +147,41 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     } finally {
       setScanning(false);
     }
+  }, [allPersons, onMatchResults, onOpenChange, stopTimer]);
+
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const img = resizeToCanvas(video);
+    setCaptured(img);
+    stopCamera();
+    setTimeout(() => scanWithImage(img), 100);
   };
+
+  const retake = () => {
+    setCaptured(null);
+    setStatusText("");
+    setElapsed(0);
+  };
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    stopCamera();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const dataUrl = resizeToCanvas(img);
+        setCaptured(dataUrl);
+        setTimeout(() => scanWithImage(dataUrl), 100);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -232,9 +229,6 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
               <div className="flex gap-2">
                 <Button variant="outline" onClick={retake} disabled={scanning}>
                   <RotateCcw className="mr-1 h-4 w-4" /> Retake
-                </Button>
-                <Button onClick={scan} disabled={scanning}>
-                  {scanning ? "Scanning…" : "Scan & Match"}
                 </Button>
               </div>
             </>
