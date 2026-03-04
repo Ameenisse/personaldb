@@ -105,15 +105,19 @@ const LandingPage = () => {
             </div>
             <div className="space-y-1">
               <Label>Building</Label>
-              <Select value={filters.building} onValueChange={(v) => setFilters((f) => ({ ...f, building: v }))} disabled={!filters.island || filters.island === "all"}>
-                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  {buildingsForSelection.map((b) => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {filters.island && filters.island !== "all" ? (
+                <Select value={filters.building} onValueChange={(v) => setFilters((f) => ({ ...f, building: v }))}>
+                  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {buildingsForSelection.map((b) => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={filters.building} onChange={(e) => setFilters((f) => ({ ...f, building: e.target.value }))} placeholder="Search building..." />
+              )}
             </div>
             <div className="space-y-1">
               <Label>Atoll</Label>
