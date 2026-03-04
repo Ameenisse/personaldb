@@ -137,8 +137,8 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
       return;
     }
 
-    setProgress(15);
-    setStatusText(`Pass 1: Fast screening ${withPhotos.length} photos…`);
+    setProgress(20);
+    setStatusText(`Matching against ${withPhotos.length} photos…`);
 
     try {
       const { data, error } = await supabase.functions.invoke("face-match", {

@@ -19,8 +19,6 @@ interface MatchResult {
 async function runBatch(
   capturedImage: string,
   batch: PersonPhoto[],
-  model: string,
-  systemPrompt: string,
   apiKey: string
 ): Promise<MatchResult[]> {
   const imageContents = batch.map((p) => ({
@@ -29,7 +27,7 @@ async function runBatch(
   }));
 
   const idList = batch
-    .map((p, idx) => `Image ${idx + 1} = person ID "${p.id}"`)
+    .map((p, idx) => `Image ${idx + 1} = ID "${p.id}"`)
     .join("\n");
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -39,15 +37,19 @@ async function runBatch(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model,
+      model: "google/gemini-3-flash-preview",
       messages: [
-        { role: "system", content: systemPrompt },
+        {
+          role: "system",
+          content:
+            "You are a precise face identification system. You receive one reference face and numbered candidate photos. Identify which candidates show the SAME person as the reference. Analyze: skull shape, eye shape/spacing/depth, nose bridge width/tip shape, jawline contour, cheekbone prominence, ear shape/size, philtrum length, lip shape. Ignore: lighting, angle, expression, age (±15yr), glasses, facial hair, makeup, head coverings, image quality. Report matches with confidence 0-100. Only include matches with confidence ≥ 85.",
+        },
         {
           role: "user",
           content: [
-            { type: "text", text: "Reference face photo:" },
+            { type: "text", text: "Reference face:" },
             { type: "image_url", image_url: { url: capturedImage } },
-            { type: "text", text: `Person photos to compare against:\n${idList}` },
+            { type: "text", text: `Candidates:\n${idList}` },
             ...imageContents,
           ],
         },
@@ -57,7 +59,7 @@ async function runBatch(
           type: "function",
           function: {
             name: "report_matches",
-            description: "Report which person IDs match the reference face with confidence scores",
+            description: "Report matching person IDs with confidence scores",
             parameters: {
               type: "object",
               properties: {
@@ -66,16 +68,12 @@ async function runBatch(
                   items: {
                     type: "object",
                     properties: {
-                      id: { type: "string", description: "The person ID" },
-                      confidence: {
-                        type: "number",
-                        description: "Confidence score 0-100 that this person matches the reference face",
-                      },
+                      id: { type: "string" },
+                      confidence: { type: "number" },
                     },
                     required: ["id", "confidence"],
                     additionalProperties: false,
                   },
-                  description: "Array of matches with confidence scores. Empty array if no matches.",
                 },
               },
               required: ["matches"],
@@ -91,9 +89,9 @@ async function runBatch(
   if (!response.ok) {
     const status = response.status;
     const text = await response.text();
-    console.error(`AI gateway error (${model}):`, status, text);
+    console.error(`AI error:`, status, text);
     if (status === 429 || status === 402) {
-      throw new Error(status === 429 ? "Rate limit exceeded. Please try again later." : "AI credits exhausted. Please add funds.");
+      throw new Error(status === 429 ? "RATE_LIMIT" : "CREDITS_EXHAUSTED");
     }
     return [];
   }
@@ -104,14 +102,13 @@ async function runBatch(
     try {
       const args = JSON.parse(toolCall.function.arguments);
       if (args.matches && Array.isArray(args.matches)) {
-        return args.matches;
+        return args.matches.filter((m: MatchResult) => m.confidence >= 85);
       }
-      // Backwards compat: if model returns matched_ids instead
       if (args.matched_ids && Array.isArray(args.matched_ids)) {
-        return args.matched_ids.map((id: string) => ({ id, confidence: 85 }));
+        return args.matched_ids.map((id: string) => ({ id, confidence: 90 }));
       }
     } catch (e) {
-      console.error("Failed to parse tool call arguments:", e);
+      console.error("Parse error:", e);
     }
   }
   return [];
@@ -126,9 +123,7 @@ serve(async (req) => {
     const { capturedImage, personPhotos } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     if (!personPhotos || personPhotos.length === 0) {
       return new Response(JSON.stringify({ matchedIds: [], matches: [] }), {
@@ -136,95 +131,52 @@ serve(async (req) => {
       });
     }
 
-    const batchSize = 20;
-
-    // ===== PASS 1: Fast screening with gemini-2.5-flash-lite =====
-    const pass1Prompt =
-      "You are a fast face screening system. Compare the reference face against numbered person photos. Report ANY person that COULD be the same individual (even if you're only ~60% sure). Focus on general face shape, skin tone, and prominent features. Include borderline cases — false positives are acceptable at this stage. For each potential match, provide a confidence score 0-100.";
-
-    const pass1Batches: PersonPhoto[][] = [];
+    // Single pass: all batches run in PARALLEL for maximum speed
+    const batchSize = 25;
+    const batches: PersonPhoto[][] = [];
     for (let i = 0; i < personPhotos.length; i += batchSize) {
-      pass1Batches.push(personPhotos.slice(i, i + batchSize));
+      batches.push(personPhotos.slice(i, i + batchSize));
     }
 
-    // Run all pass 1 batches in PARALLEL
-    const pass1Results = await Promise.allSettled(
-      pass1Batches.map((batch) =>
-        runBatch(capturedImage, batch, "google/gemini-2.5-flash-lite", pass1Prompt, LOVABLE_API_KEY)
-      )
+    const results = await Promise.allSettled(
+      batches.map((batch) => runBatch(capturedImage, batch, LOVABLE_API_KEY))
     );
 
-    // Collect candidates from pass 1 (threshold >= 50%)
-    const candidates: PersonPhoto[] = [];
-    for (const result of pass1Results) {
+    const allMatches: MatchResult[] = [];
+    for (const result of results) {
       if (result.status === "fulfilled") {
-        for (const match of result.value) {
-          if (match.confidence >= 50) {
-            const person = personPhotos.find((p: PersonPhoto) => p.id === match.id);
-            if (person && !candidates.find((c) => c.id === person.id)) {
-              candidates.push(person);
-            }
-          }
-        }
+        allMatches.push(...result.value);
       } else {
-        // Check for rate limit / payment errors
-        const errMsg = result.reason?.message || "";
-        if (errMsg.includes("Rate limit") || errMsg.includes("credits")) {
-          const status = errMsg.includes("Rate limit") ? 429 : 402;
-          return new Response(JSON.stringify({ error: errMsg }), {
-            status,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const msg = result.reason?.message || "";
+        if (msg === "RATE_LIMIT") {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+            status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (msg === "CREDITS_EXHAUSTED") {
+          return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds." }), {
+            status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
       }
     }
 
-    if (candidates.length === 0) {
-      return new Response(JSON.stringify({ matchedIds: [], matches: [] }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ===== PASS 2: Precise matching with gemini-3-flash-preview =====
-    const pass2Prompt =
-      "You are a precise face verification system. You receive a reference face photo and candidate person photos that passed initial screening. Carefully verify if each candidate is the SAME individual as the reference. Focus on facial bone structure, eye shape and spacing, nose bridge and tip shape, jawline contour, ear shape, and hairline pattern. Ignore differences in lighting, angle, expression, age variation (up to ~10 years), glasses, facial hair, makeup, or head coverings. For each match, provide a confidence score 0-100. Only report matches where you are genuinely confident.";
-
-    const pass2Batches: PersonPhoto[][] = [];
-    for (let i = 0; i < candidates.length; i += batchSize) {
-      pass2Batches.push(candidates.slice(i, i + batchSize));
-    }
-
-    // Run all pass 2 batches in PARALLEL
-    const pass2Results = await Promise.allSettled(
-      pass2Batches.map((batch) =>
-        runBatch(capturedImage, batch, "google/gemini-3-flash-preview", pass2Prompt, LOVABLE_API_KEY)
-      )
-    );
-
-    // Collect final matches (threshold >= 85%)
-    const finalMatches: MatchResult[] = [];
-    for (const result of pass2Results) {
-      if (result.status === "fulfilled") {
-        for (const match of result.value) {
-          if (match.confidence >= 85) {
-            finalMatches.push(match);
-          }
-        }
+    // Deduplicate by ID, keep highest confidence
+    const bestMap = new Map<string, MatchResult>();
+    for (const m of allMatches) {
+      const existing = bestMap.get(m.id);
+      if (!existing || m.confidence > existing.confidence) {
+        bestMap.set(m.id, m);
       }
     }
 
-    // Sort by confidence descending
-    finalMatches.sort((a, b) => b.confidence - a.confidence);
+    const finalMatches = Array.from(bestMap.values()).sort((a, b) => b.confidence - a.confidence);
 
     return new Response(
       JSON.stringify({
         matchedIds: finalMatches.map((m) => m.id),
         matches: finalMatches,
-        stats: {
-          totalPhotos: personPhotos.length,
-          pass1Candidates: candidates.length,
-          finalMatches: finalMatches.length,
-        },
+        stats: { totalPhotos: personPhotos.length, batches: batches.length, finalMatches: finalMatches.length },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -232,10 +184,7 @@ serve(async (req) => {
     console.error("face-match error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
