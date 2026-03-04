@@ -126,7 +126,7 @@ const LandingPage = () => {
             <Button onClick={() => setSearched(true)}><Search className="mr-1 h-4 w-4" /> Search</Button>
             <Button variant="outline" onClick={handleReset}><RotateCcw className="mr-1 h-4 w-4" /> Reset</Button>
             <Button variant="secondary" onClick={() => navigate("/completed")}><Plus className="mr-1 h-4 w-4" /> Add Person</Button>
-            <Button variant="secondary" onClick={() => navigate("/generate-sheet")}><FileText className="mr-1 h-4 w-4" /> Generate Sheet</Button>
+            
           </div>
         </CardContent>
       </Card>
