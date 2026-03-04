@@ -27,8 +27,8 @@ serve(async (req) => {
       });
     }
 
-    // Process in batches of 8 to stay within token limits
-    const batchSize = 8;
+    // Process in batches of 15 for faster results
+    const batchSize = 15;
     const allMatchedIds: string[] = [];
 
     for (let i = 0; i < personPhotos.length; i += batchSize) {
@@ -48,12 +48,12 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
           messages: [
             {
               role: "system",
               content:
-                "You are a face matching assistant. You will receive a reference face photo and several person photos. Compare the faces and determine which person photos match the reference face. Use the report_matches tool to return results. A match means the same person appears in both photos. Be strict - only match if you are confident it is the same person.",
+                "You are a precise face matching system. You receive a reference face photo and several numbered person photos. Identify which person photos show the SAME individual as the reference. Focus on facial bone structure, eye shape/spacing, nose shape, jawline, and ear shape. Ignore differences in lighting, angle, expression, age variation, glasses, facial hair, or head coverings. Only report a match if you are at least 85% confident. If uncertain, do NOT include that ID.",
             },
             {
               role: "user",
