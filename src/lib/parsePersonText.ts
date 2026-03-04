@@ -92,9 +92,14 @@ export function parsePersonText(raw: string): ParsedPerson {
     if (m3) { dob = `${m3[3]}-${m3[2]}-${m3[1]}`; break; }
   }
 
-  // Extract Contact (last 7-10 digit number)
-  const allNumbers = raw.match(/\b\d{7,10}\b/g);
-  if (allNumbers) contact = allNumbers[allNumbers.length - 1];
+  // Extract Contact (supports slash-separated numbers like 9588332/7566376)
+  const slashMatch = raw.match(/\b(\d{7,10})\s*\/\s*(\d{7,10})\b/);
+  if (slashMatch) {
+    contact = `${slashMatch[1]} / ${slashMatch[2]}`;
+  } else {
+    const allNumbers = raw.match(/\b\d{7,10}\b/g);
+    if (allNumbers) contact = allNumbers[allNumbers.length - 1];
+  }
 
   // Extract Address: "Building, Atoll. Island"
   // Rule: before comma = building, between comma and dot = atoll, after dot = island
