@@ -25,6 +25,7 @@ const LandingPage = () => {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoZoom, setPhotoZoom] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraMatchIds, setCameraMatchIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -45,6 +46,9 @@ const LandingPage = () => {
 
   const results = useMemo(() => {
     if (!searched) return [];
+    if (cameraMatchIds) {
+      return allPersons.filter((p) => cameraMatchIds.includes(p.id));
+    }
     return allPersons.filter((p) => {
       const f = filters;
       if (f.id && !p.id_no.toLowerCase().includes(f.id.toLowerCase())) return false;
@@ -55,7 +59,7 @@ const LandingPage = () => {
       if (f.phone && !(p.contact || "").includes(f.phone)) return false;
       return true;
     });
-  }, [searched, filters, allPersons]);
+  }, [searched, filters, allPersons, cameraMatchIds]);
 
   useEffect(() => {
     if (!selected?.photo_path) { setPhotoUrl(null); return; }
