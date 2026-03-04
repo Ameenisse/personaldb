@@ -24,6 +24,7 @@ const LandingPage = () => {
   const [selected, setSelected] = useState<Person | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoZoom, setPhotoZoom] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -126,6 +127,7 @@ const LandingPage = () => {
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setSearched(true)}><Search className="mr-1 h-4 w-4" /> Search</Button>
             <Button variant="outline" onClick={handleReset}><RotateCcw className="mr-1 h-4 w-4" /> Reset</Button>
+            <Button variant="secondary" onClick={() => setCameraOpen(true)}><Camera className="mr-1 h-4 w-4" /> Camera Scan</Button>
             <Button variant="secondary" onClick={() => navigate("/completed")}><Plus className="mr-1 h-4 w-4" /> Add Person</Button>
           </div>
         </CardContent>
