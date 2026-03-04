@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { differenceInYears, format, parseISO } from "date-fns";
-import { Search, RotateCcw, Plus } from "lucide-react";
+import { Search, RotateCcw, Plus, Camera } from "lucide-react";
+import CameraScanDialog from "@/components/CameraScanDialog";
 
 type Person = Tables<"persons">;
 
