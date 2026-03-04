@@ -92,12 +92,14 @@ export function parsePersonText(raw: string): ParsedPerson {
     if (m3) { dob = `${m3[3]}-${m3[2]}-${m3[1]}`; break; }
   }
 
-  // Extract Contact (supports slash-separated numbers like 9588332/7566376)
-  const slashMatch = raw.match(/\b(\d{7,10})\s*\/\s*(\d{7,10})\b/);
+  // Extract Contact (supports slash-separated numbers like 9588332/7566376 and dash-formatted like 992-1412)
+  // First normalize dash-formatted numbers (e.g. 992-1412 → 9921412)
+  const contactNormalized = raw.replace(/\b(\d{3,5})-(\d{3,5})\b/g, (_, a, b) => a + b);
+  const slashMatch = contactNormalized.match(/\b(\d{7,10})\s*\/\s*(\d{7,10})\b/);
   if (slashMatch) {
     contact = `${slashMatch[1]} / ${slashMatch[2]}`;
   } else {
-    const allNumbers = raw.match(/\b\d{7,10}\b/g);
+    const allNumbers = contactNormalized.match(/\b\d{7,10}\b/g);
     if (allNumbers) contact = allNumbers[allNumbers.length - 1];
   }
 
