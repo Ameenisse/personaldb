@@ -27,8 +27,8 @@ serve(async (req) => {
       });
     }
 
-    // Process in batches of 8 to stay within token limits
-    const batchSize = 8;
+    // Process in batches of 15 for faster results
+    const batchSize = 15;
     const allMatchedIds: string[] = [];
 
     for (let i = 0; i < personPhotos.length; i += batchSize) {
