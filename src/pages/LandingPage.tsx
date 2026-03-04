@@ -41,6 +41,16 @@ const LandingPage = () => {
     return [...new Set(islands)].sort();
   }, [filters.atoll, allPersons]);
 
+  const buildingsForSelection = useMemo(() => {
+    const filtered = allPersons.filter((p) => {
+      if (filters.atoll && filters.atoll !== "all" && p.atoll !== filters.atoll) return false;
+      if (filters.island && filters.island !== "all" && p.island !== filters.island) return false;
+      return !!p.building;
+    });
+    const buildings = filtered.map((p) => p.building!.trim()).filter(Boolean);
+    return [...new Set(buildings)].sort();
+  }, [filters.atoll, filters.island, allPersons]);
+
   const results = useMemo(() => {
     if (!searched) return [];
     return allPersons.filter((p) => {
@@ -70,7 +80,11 @@ const LandingPage = () => {
   };
 
   const handleAtollChange = (v: string) => {
-    setFilters((f) => ({ ...f, atoll: v, island: "" }));
+    setFilters((f) => ({ ...f, atoll: v, island: "", building: "" }));
+  };
+
+  const handleIslandChange = (v: string) => {
+    setFilters((f) => ({ ...f, island: v, building: "" }));
   };
 
   return (
@@ -91,7 +105,15 @@ const LandingPage = () => {
             </div>
             <div className="space-y-1">
               <Label>Building</Label>
-              <Input value={filters.building} onChange={(e) => setFilters((f) => ({ ...f, building: e.target.value }))} />
+              <Select value={filters.building} onValueChange={(v) => setFilters((f) => ({ ...f, building: v }))}>
+                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {buildingsForSelection.map((b) => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Atoll</Label>
@@ -107,7 +129,7 @@ const LandingPage = () => {
             </div>
             <div className="space-y-1">
               <Label>Island</Label>
-              <Select value={filters.island} onValueChange={(v) => setFilters((f) => ({ ...f, island: v }))}>
+              <Select value={filters.island} onValueChange={handleIslandChange}>
                 <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
