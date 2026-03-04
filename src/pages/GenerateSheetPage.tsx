@@ -8,8 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FileText, Printer, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown, Columns } from "lucide-react";
+import { FileText, Download, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown, Columns, FileSpreadsheet } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 type Person = Tables<"persons">;
 
@@ -108,6 +111,43 @@ const GenerateSheetPage = () => {
     setGenerated(false);
   };
 
+  const getVisibleColumns = () => ALL_COLUMNS.filter(c => visibleCols.has(c.key));
+
+  const getTableData = () => {
+    return results.map((p, i) => {
+      const row: Record<string, string | number> = { "#": i + 1 };
+      for (const col of getVisibleColumns()) {
+        if (col.key === "dob") row[col.label] = p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : "";
+        else row[col.label] = (p[col.key] ?? "") as string;
+      }
+      return row;
+    });
+  };
+
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(`Person Sheet — ${filterLabel}`, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`${results.length} records`, 14, 22);
+    const cols = getVisibleColumns();
+    const head = [["#", ...cols.map(c => c.label)]];
+    const body = results.map((p, i) => [
+      i + 1,
+      ...cols.map(c => c.key === "dob" ? (p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : "") : (p[c.key] ?? "") as string),
+    ]);
+    autoTable(doc, { head, body, startY: 28, styles: { fontSize: 8 } });
+    doc.save(`sheet-${filterLabel.replace(/\s*\/\s*/g, "-")}.pdf`);
+  };
+
+  const handleDownloadExcel = () => {
+    const data = getTableData();
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet");
+    XLSX.writeFile(wb, `sheet-${filterLabel.replace(/\s*\/\s*/g, "-")}.xlsx`);
+  };
+
   const handleAtollChange = (v: string) => {
     setFilters((f) => ({ ...f, atoll: v, island: "", building: "" }));
   };
@@ -172,7 +212,10 @@ const GenerateSheetPage = () => {
             <Button onClick={() => setGenerated(true)}><FileText className="mr-1 h-4 w-4" /> Generate</Button>
             <Button variant="outline" onClick={handleReset}><RotateCcw className="mr-1 h-4 w-4" /> Reset</Button>
             {generated && results.length > 0 && (
-              <Button variant="secondary" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" /> Save as PDF</Button>
+              <>
+                <Button variant="secondary" onClick={handleDownloadPDF}><Download className="mr-1 h-4 w-4" /> Download PDF</Button>
+                <Button variant="secondary" onClick={handleDownloadExcel}><FileSpreadsheet className="mr-1 h-4 w-4" /> Download Excel</Button>
+              </>
             )}
             {generated && (
               <Popover>
