@@ -181,6 +181,10 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
               <Button onClick={capture}>
                 <Camera className="mr-1 h-4 w-4" /> Capture
               </Button>
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="mr-1 h-4 w-4" /> Upload Photo
+              </Button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
             </>
           ) : (
             <>
