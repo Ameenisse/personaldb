@@ -133,7 +133,7 @@ const LandingPage = () => {
       {searched && (
         <Card>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[280px]">
+            <ScrollArea className="h-[280px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
