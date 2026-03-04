@@ -6,17 +6,36 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Printer, RotateCcw } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FileText, Printer, RotateCcw, ArrowUp, ArrowDown, ArrowUpDown, Columns } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 type Person = Tables<"persons">;
 
 const ATOLLS = ["HA.", "HDH.", "SH.", "N.", "R.", "B.", "LH.", "K.", "AA.", "ADH.", "V.", "M.", "F.", "DH.", "TH.", "L.", "GA.", "GDH.", "GN.", "S."];
 
+type ColumnKey = "id_no" | "name" | "dob" | "sex" | "building" | "atoll" | "island" | "contact";
+type SortDir = "asc" | "desc";
+
+const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: "id_no", label: "ID" },
+  { key: "name", label: "Name" },
+  { key: "dob", label: "DOB" },
+  { key: "sex", label: "Sex" },
+  { key: "building", label: "Building" },
+  { key: "atoll", label: "Atoll" },
+  { key: "island", label: "Island" },
+  { key: "contact", label: "Contact" },
+];
+
 const GenerateSheetPage = () => {
   const [allPersons, setAllPersons] = useState<Person[]>([]);
   const [filters, setFilters] = useState({ atoll: "", island: "", building: "" });
   const [generated, setGenerated] = useState(false);
+  const [sortCol, setSortCol] = useState<ColumnKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(new Set(ALL_COLUMNS.map(c => c.key)));
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -49,14 +68,40 @@ const GenerateSheetPage = () => {
 
   const results = useMemo(() => {
     if (!generated) return [];
-    return allPersons.filter((p) => {
+    const filtered = allPersons.filter((p) => {
       const f = filters;
       if (f.atoll && f.atoll !== "all" && p.atoll !== f.atoll) return false;
       if (f.island && f.island !== "all" && !(p.island || "").toLowerCase().includes(f.island.toLowerCase())) return false;
       if (f.building && !(p.building || "").toLowerCase().includes(f.building.toLowerCase())) return false;
       return true;
     });
-  }, [generated, filters, allPersons]);
+    if (!sortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      let va = (a[sortCol] ?? "") as string;
+      let vb = (b[sortCol] ?? "") as string;
+      const cmp = va.localeCompare(vb, undefined, { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [generated, filters, allPersons, sortCol, sortDir]);
+
+  const toggleSort = (col: ColumnKey) => {
+    if (sortCol === col) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortCol(null); setSortDir("asc"); }
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
+
+  const toggleColumn = (col: ColumnKey) => {
+    setVisibleCols(prev => {
+      const next = new Set(prev);
+      if (next.has(col)) { if (next.size > 1) next.delete(col); }
+      else next.add(col);
+      return next;
+    });
+  };
 
   const handleReset = () => {
     setFilters({ atoll: "", island: "", building: "" });
@@ -123,11 +168,26 @@ const GenerateSheetPage = () => {
               </Select>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setGenerated(true)}><FileText className="mr-1 h-4 w-4" /> Generate</Button>
             <Button variant="outline" onClick={handleReset}><RotateCcw className="mr-1 h-4 w-4" /> Reset</Button>
             {generated && results.length > 0 && (
               <Button variant="secondary" onClick={() => window.print()}><Printer className="mr-1 h-4 w-4" /> Save as PDF</Button>
+            )}
+            {generated && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline"><Columns className="mr-1 h-4 w-4" /> Columns</Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2">
+                  {ALL_COLUMNS.map((col) => (
+                    <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded">
+                      <Checkbox checked={visibleCols.has(col.key)} onCheckedChange={() => toggleColumn(col.key)} />
+                      {col.label}
+                    </label>
+                  ))}
+                </PopoverContent>
+              </Popover>
             )}
           </div>
         </CardContent>
@@ -144,32 +204,32 @@ const GenerateSheetPage = () => {
             </div>
             <Table>
               <TableHeader>
-                <TableRow>
+               <TableRow>
                   <TableHead>#</TableHead>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>DOB</TableHead>
-                  <TableHead>Sex</TableHead>
-                  <TableHead>Building</TableHead>
-                  <TableHead>Atoll</TableHead>
-                  <TableHead>Island</TableHead>
-                  <TableHead>Contact</TableHead>
+                  {ALL_COLUMNS.filter(c => visibleCols.has(c.key)).map((col) => (
+                    <TableHead key={col.key} className="cursor-pointer select-none" onClick={() => toggleSort(col.key)}>
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {sortCol === col.key ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                      </span>
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {results.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground">No results</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={visibleCols.size + 1} className="text-center text-muted-foreground">No results</TableCell></TableRow>
                 ) : results.map((p, i) => (
                   <TableRow key={p.id}>
                     <TableCell>{i + 1}</TableCell>
-                    <TableCell>{p.id_no}</TableCell>
-                    <TableCell>{p.name}</TableCell>
-                    <TableCell>{p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : ""}</TableCell>
-                    <TableCell>{p.sex || ""}</TableCell>
-                    <TableCell>{p.building || ""}</TableCell>
-                    <TableCell>{p.atoll || ""}</TableCell>
-                    <TableCell>{p.island || ""}</TableCell>
-                    <TableCell>{p.contact || ""}</TableCell>
+                    {visibleCols.has("id_no") && <TableCell>{p.id_no}</TableCell>}
+                    {visibleCols.has("name") && <TableCell>{p.name}</TableCell>}
+                    {visibleCols.has("dob") && <TableCell>{p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : ""}</TableCell>}
+                    {visibleCols.has("sex") && <TableCell>{p.sex || ""}</TableCell>}
+                    {visibleCols.has("building") && <TableCell>{p.building || ""}</TableCell>}
+                    {visibleCols.has("atoll") && <TableCell>{p.atoll || ""}</TableCell>}
+                    {visibleCols.has("island") && <TableCell>{p.island || ""}</TableCell>}
+                    {visibleCols.has("contact") && <TableCell>{p.contact || ""}</TableCell>}
                   </TableRow>
                 ))}
               </TableBody>
