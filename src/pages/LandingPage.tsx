@@ -231,21 +231,15 @@ const LandingPage = () => {
         onOpenChange={setCameraOpen}
         allPersons={allPersons}
         onMatchResults={(matched) => {
+          setCameraMatchIds(matched.map((p) => p.id));
           setSearched(true);
-          // Replace results with matched persons by filtering allPersons
-          setFilters({ id: "", name: "", building: "", atoll: "", island: "", phone: "" });
-          // We need a way to show only matched results - use a ref or state
-          setAllPersons((prev) => {
-            // Store matched IDs and trigger a re-render showing only matches
-            return prev;
-          });
-          // Simpler: just set selected if single match, or show in results
           if (matched.length === 1) {
             setSelected(matched[0]);
           }
         }}
       />
     </div>
+  );
 };
 
 export default LandingPage;
