@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { differenceInYears, format, parseISO } from "date-fns";
 import { Search, RotateCcw, Plus } from "lucide-react";
 
@@ -20,6 +22,7 @@ const LandingPage = () => {
   const [searched, setSearched] = useState(false);
   const [selected, setSelected] = useState<Person | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoZoom, setPhotoZoom] = useState(false);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -29,6 +32,15 @@ const LandingPage = () => {
     fetchAll();
   }, []);
 
+  const islandsForAtoll = useMemo(() => {
+    if (!filters.atoll || filters.atoll === "all") return [];
+    const islands = allPersons
+      .filter((p) => p.atoll === filters.atoll && p.island)
+      .map((p) => p.island!.trim())
+      .filter(Boolean);
+    return [...new Set(islands)].sort();
+  }, [filters.atoll, allPersons]);
+
   const results = useMemo(() => {
     if (!searched) return [];
     return allPersons.filter((p) => {
@@ -37,7 +49,7 @@ const LandingPage = () => {
       if (f.name && !p.name.toLowerCase().includes(f.name.toLowerCase())) return false;
       if (f.building && !(p.building || "").toLowerCase().includes(f.building.toLowerCase())) return false;
       if (f.atoll && f.atoll !== "all" && p.atoll !== f.atoll) return false;
-      if (f.island && !(p.island || "").toLowerCase().includes(f.island.toLowerCase())) return false;
+      if (f.island && f.island !== "all" && !(p.island || "").toLowerCase().includes(f.island.toLowerCase())) return false;
       if (f.phone && !(p.contact || "").includes(f.phone)) return false;
       return true;
     });
@@ -55,6 +67,10 @@ const LandingPage = () => {
     setFilters({ id: "", name: "", building: "", atoll: "", island: "", phone: "" });
     setSearched(false);
     setSelected(null);
+  };
+
+  const handleAtollChange = (v: string) => {
+    setFilters((f) => ({ ...f, atoll: v, island: "" }));
   };
 
   return (
@@ -79,7 +95,7 @@ const LandingPage = () => {
             </div>
             <div className="space-y-1">
               <Label>Atoll</Label>
-              <Select value={filters.atoll} onValueChange={(v) => setFilters((f) => ({ ...f, atoll: v }))}>
+              <Select value={filters.atoll} onValueChange={handleAtollChange}>
                 <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
@@ -91,7 +107,15 @@ const LandingPage = () => {
             </div>
             <div className="space-y-1">
               <Label>Island</Label>
-              <Input value={filters.island} onChange={(e) => setFilters((f) => ({ ...f, island: e.target.value }))} />
+              <Select value={filters.island} onValueChange={(v) => setFilters((f) => ({ ...f, island: v }))}>
+                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {islandsForAtoll.map((isl) => (
+                    <SelectItem key={isl} value={isl}>{isl}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Phone</Label>
@@ -109,52 +133,59 @@ const LandingPage = () => {
       {searched && (
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Building/Atoll/Island</TableHead>
-                  <TableHead>Phone</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">No results</TableCell></TableRow>
-                ) : results.map((p) => (
-                  <TableRow
-                    key={p.id}
-                    className="cursor-pointer"
-                    onDoubleClick={() => setSelected(p)}
-                    data-state={selected?.id === p.id ? "selected" : undefined}
-                  >
-                    <TableCell>{p.id_no}</TableCell>
-                    <TableCell>{p.name}</TableCell>
-                    <TableCell>{[p.building, p.atoll, p.island].filter(Boolean).join(" ")}</TableCell>
-                    <TableCell>{p.contact}</TableCell>
+            <ScrollArea className="max-h-[280px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Building/Atoll/Island</TableHead>
+                    <TableHead>Phone</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {results.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">No results</TableCell></TableRow>
+                  ) : results.map((p) => (
+                    <TableRow
+                      key={p.id}
+                      className="cursor-pointer hover:bg-accent"
+                      onDoubleClick={() => setSelected(p)}
+                    >
+                      <TableCell>{p.id_no}</TableCell>
+                      <TableCell>{p.name}</TableCell>
+                      <TableCell>{[p.building, p.atoll, p.island].filter(Boolean).join(" ")}</TableCell>
+                      <TableCell>{p.contact}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           </CardContent>
         </Card>
       )}
 
-      {selected && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Selected Person Info</CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Person Info Dialog */}
+      <Dialog open={!!selected} onOpenChange={(open) => { if (!open) setSelected(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Person Info</DialogTitle>
+          </DialogHeader>
+          {selected && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex items-center justify-center">
                 {photoUrl ? (
-                  <img src={photoUrl} alt={selected.name} className="max-h-48 rounded-lg object-cover shadow" />
+                  <img
+                    src={photoUrl}
+                    alt={selected.name}
+                    className="max-h-36 rounded-lg object-cover shadow cursor-pointer"
+                    onClick={() => setPhotoZoom(true)}
+                  />
                 ) : (
-                  <div className="flex h-48 w-36 items-center justify-center rounded-lg bg-muted text-muted-foreground text-sm">No Photo</div>
+                  <div className="flex h-36 w-28 items-center justify-center rounded-lg bg-muted text-muted-foreground text-sm">No Photo</div>
                 )}
               </div>
-              <div className="space-y-2 text-sm">
+              <div className="space-y-1.5 text-sm">
                 <p><span className="font-medium">Name:</span> {selected.name}</p>
                 <p><span className="font-medium">ID No:</span> {selected.id_no}</p>
                 <p><span className="font-medium">DOB:</span> {selected.dob ? format(parseISO(selected.dob), "dd MMM yyyy") : "N/A"}</p>
@@ -164,9 +195,18 @@ const LandingPage = () => {
                 <p><span className="font-medium">Contact:</span> {selected.contact || "N/A"}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo Zoom Dialog */}
+      <Dialog open={photoZoom} onOpenChange={setPhotoZoom}>
+        <DialogContent className="sm:max-w-lg flex items-center justify-center p-2">
+          {photoUrl && (
+            <img src={photoUrl} alt="Zoomed" className="max-h-[80vh] rounded-lg object-contain" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
