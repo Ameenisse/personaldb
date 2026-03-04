@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Camera, X, RotateCcw, Upload } from "lucide-react";
+import { Camera, RotateCcw, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { toast } from "sonner";
@@ -16,6 +16,8 @@ interface CameraScanDialogProps {
   onMatchResults: (persons: Person[]) => void;
 }
 
+const MAX_DIM = 600;
+
 const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: CameraScanDialogProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -23,6 +25,9 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
   const [captured, setCaptured] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [statusText, setStatusText] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startCamera = useCallback(async () => {
     try {
@@ -30,9 +35,7 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
         video: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      if (videoRef.current) videoRef.current.srcObject = stream;
     } catch {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -49,6 +52,13 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     streamRef.current = null;
   }, []);
 
+  const stopTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     if (open && !captured) startCamera();
     if (!open) {
@@ -56,27 +66,35 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
       setCaptured(null);
       setScanning(false);
       setProgress(0);
+      setStatusText("");
+      setElapsed(0);
+      stopTimer();
     }
-    return () => stopCamera();
-  }, [open, captured, startCamera, stopCamera]);
+    return () => { stopCamera(); stopTimer(); };
+  }, [open, captured, startCamera, stopCamera, stopTimer]);
+
+  const resizeToCanvas = (source: HTMLVideoElement | HTMLImageElement): string => {
+    const canvas = document.createElement("canvas");
+    const w = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
+    const h = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
+    const scale = Math.min(MAX_DIM / w, MAX_DIM / h, 1);
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    canvas.getContext("2d")!.drawImage(source, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  };
 
   const capture = () => {
     const video = videoRef.current;
     if (!video) return;
-    const canvas = document.createElement("canvas");
-    const maxDim = 400;
-    const scale = Math.min(maxDim / video.videoWidth, maxDim / video.videoHeight, 1);
-    canvas.width = video.videoWidth * scale;
-    canvas.height = video.videoHeight * scale;
-    canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-    setCaptured(dataUrl);
+    setCaptured(resizeToCanvas(video));
     stopCamera();
   };
 
   const retake = () => {
     setCaptured(null);
-    // camera will restart via useEffect
+    setStatusText("");
+    setElapsed(0);
   };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,15 +104,7 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const maxDim = 400;
-        const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setCaptured(canvas.toDataURL("image/jpeg", 0.8));
-      };
+      img.onload = () => setCaptured(resizeToCanvas(img));
       img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
@@ -104,9 +114,15 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
   const scan = async () => {
     if (!captured) return;
     setScanning(true);
-    setProgress(10);
+    setProgress(5);
+    setElapsed(0);
+    setStatusText("Preparing photos…");
 
-    // Collect persons with photos
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startTime) / 1000));
+    }, 500);
+
     const withPhotos = allPersons
       .filter((p) => p.photo_path)
       .map((p) => ({
@@ -117,17 +133,19 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     if (withPhotos.length === 0) {
       toast.error("No person photos in database to compare against");
       setScanning(false);
+      stopTimer();
       return;
     }
 
-    setProgress(30);
+    setProgress(15);
+    setStatusText(`Pass 1: Fast screening ${withPhotos.length} photos…`);
 
     try {
       const { data, error } = await supabase.functions.invoke("face-match", {
         body: { capturedImage: captured, personPhotos: withPhotos },
       });
 
-      setProgress(90);
+      stopTimer();
 
       if (error) {
         toast.error("Scan failed: " + error.message);
@@ -141,11 +159,19 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
         return;
       }
 
+      setProgress(95);
+      setStatusText("Processing results…");
+
       const matchedIds: string[] = data?.matchedIds || [];
+      const stats = data?.stats;
+
       if (matchedIds.length === 0) {
         toast.info("No matching persons found");
       } else {
-        toast.success(`Found ${matchedIds.length} match(es)`);
+        const statsMsg = stats
+          ? ` (scanned ${stats.totalPhotos}, ${stats.pass1Candidates} candidates, ${stats.finalMatches} confirmed)`
+          : "";
+        toast.success(`Found ${matchedIds.length} match(es)${statsMsg}`);
       }
 
       const matched = allPersons.filter((p) => matchedIds.includes(p.id));
@@ -153,11 +179,14 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
       setProgress(100);
       onOpenChange(false);
     } catch (e: any) {
+      stopTimer();
       toast.error("Scan error: " + (e?.message || "Unknown error"));
     } finally {
       setScanning(false);
     }
   };
+
+  const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,20 +207,25 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
                 muted
                 className="w-full max-h-64 rounded-lg bg-muted object-cover"
               />
-              <Button onClick={capture}>
-                <Camera className="mr-1 h-4 w-4" /> Capture
-              </Button>
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                <Upload className="mr-1 h-4 w-4" /> Upload Photo
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={capture}>
+                  <Camera className="mr-1 h-4 w-4" /> Capture
+                </Button>
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="mr-1 h-4 w-4" /> Upload Photo
+                </Button>
+              </div>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
             </>
           ) : (
             <>
               <img src={captured} alt="Captured" className="w-full max-h-64 rounded-lg object-cover" />
               {scanning && (
-                <div className="w-full space-y-1">
-                  <p className="text-sm text-muted-foreground text-center">Scanning faces…</p>
+                <div className="w-full space-y-2">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>{statusText}</span>
+                    <span className="font-mono">{formatTime(elapsed)}</span>
+                  </div>
                   <Progress value={progress} className="h-2" />
                 </div>
               )}
