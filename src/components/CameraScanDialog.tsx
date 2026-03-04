@@ -81,13 +81,14 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     canvas.width = w * scale;
     canvas.height = h * scale;
     canvas.getContext("2d")!.drawImage(source, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.85);
+    return canvas.toDataURL("image/jpeg", 0.7);
   };
 
   const capture = () => {
     const video = videoRef.current;
     if (!video) return;
-    setCaptured(resizeToCanvas(video));
+    const img = resizeToCanvas(video);
+    setCaptured(img);
     stopCamera();
   };
 

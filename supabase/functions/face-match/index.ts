@@ -43,7 +43,7 @@ async function runBatch(
         {
           role: "system",
           content:
-            "You are a precise face identification system. You receive one reference face and numbered candidate photos. Identify which candidates show the SAME person as the reference. Analyze: skull shape, eye shape/spacing/depth, nose bridge width/tip shape, jawline contour, cheekbone prominence, ear shape/size, philtrum length, lip shape. Ignore: lighting, angle, expression, age (±15yr), glasses, facial hair, makeup, head coverings, image quality. Report matches with confidence 0-100. Only include matches with confidence ≥ 85.",
+            "You are a face matcher. Given a reference face and numbered candidates, identify which candidates are the SAME person. Analyze bone structure, eye shape, nose, jawline. Ignore lighting, angle, expression, age, glasses, hair. Return matches with confidence 0-100, only ≥85.",
         },
         {
           role: "user",
@@ -133,7 +133,7 @@ serve(async (req) => {
     }
 
     // Single pass: all batches run in PARALLEL for maximum speed
-    const batchSize = 25;
+    const batchSize = 30;
     const batches: PersonPhoto[][] = [];
     for (let i = 0; i < personPhotos.length; i += batchSize) {
       batches.push(personPhotos.slice(i, i + batchSize));
