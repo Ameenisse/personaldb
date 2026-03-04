@@ -127,4 +127,10 @@ All colors MUST be HSL.
     padding: 4px 6px;
     border-bottom: 1px solid #ddd;
   }
+  #sheet-table tr:nth-child(odd) td {
+    background-color: #ffffff;
+  }
+  #sheet-table tr:nth-child(even) td {
+    background-color: #f9f9f9;
+  }
 }
