@@ -11,8 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { differenceInYears, format, parseISO } from "date-fns";
-import { Search, RotateCcw, Plus, Camera } from "lucide-react";
-import CameraScanDialog from "@/components/CameraScanDialog";
+import { Search, RotateCcw, Plus } from "lucide-react";
 
 type Person = Tables<"persons">;
 
@@ -24,8 +23,6 @@ const LandingPage = () => {
   const [selected, setSelected] = useState<Person | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoZoom, setPhotoZoom] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraMatchIds, setCameraMatchIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -46,9 +43,6 @@ const LandingPage = () => {
 
   const results = useMemo(() => {
     if (!searched) return [];
-    if (cameraMatchIds) {
-      return allPersons.filter((p) => cameraMatchIds.includes(p.id));
-    }
     return allPersons.filter((p) => {
       const f = filters;
       if (f.id && !p.id_no.toLowerCase().includes(f.id.toLowerCase())) return false;
@@ -59,7 +53,7 @@ const LandingPage = () => {
       if (f.phone && !(p.contact || "").includes(f.phone)) return false;
       return true;
     });
-  }, [searched, filters, allPersons, cameraMatchIds]);
+  }, [searched, filters, allPersons]);
 
   useEffect(() => {
     if (!selected?.photo_path) { setPhotoUrl(null); return; }
@@ -73,7 +67,6 @@ const LandingPage = () => {
     setFilters({ id: "", name: "", building: "", atoll: "", island: "", phone: "" });
     setSearched(false);
     setSelected(null);
-    setCameraMatchIds(null);
   };
 
   const handleAtollChange = (v: string) => {
@@ -130,9 +123,8 @@ const LandingPage = () => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => { setCameraMatchIds(null); setSearched(true); }}><Search className="mr-1 h-4 w-4" /> Search</Button>
+            <Button onClick={() => setSearched(true)}><Search className="mr-1 h-4 w-4" /> Search</Button>
             <Button variant="outline" onClick={handleReset}><RotateCcw className="mr-1 h-4 w-4" /> Reset</Button>
-            <Button variant="secondary" onClick={() => setCameraOpen(true)}><Camera className="mr-1 h-4 w-4" /> Camera Scan</Button>
             <Button variant="secondary" onClick={() => navigate("/completed")}><Plus className="mr-1 h-4 w-4" /> Add Person</Button>
           </div>
         </CardContent>
@@ -226,18 +218,6 @@ const LandingPage = () => {
         </DialogContent>
       </Dialog>
 
-      <CameraScanDialog
-        open={cameraOpen}
-        onOpenChange={setCameraOpen}
-        allPersons={allPersons}
-        onMatchResults={(matched) => {
-          setCameraMatchIds(matched.map((p) => p.id));
-          setSearched(true);
-          if (matched.length === 1) {
-            setSelected(matched[0]);
-          }
-        }}
-      />
     </div>
   );
 };
