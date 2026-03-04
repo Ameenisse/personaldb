@@ -182,80 +182,6 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     e.target.value = "";
   };
 
-  const scan = async () => {
-    if (!captured) return;
-    setScanning(true);
-    setProgress(5);
-    setElapsed(0);
-    setStatusText("Preparing photos…");
-
-    const startTime = Date.now();
-    timerRef.current = setInterval(() => {
-      setElapsed(Math.round((Date.now() - startTime) / 1000));
-    }, 500);
-
-    const withPhotos = allPersons
-      .filter((p) => p.photo_path)
-      .map((p) => ({
-        id: p.id,
-        photoUrl: supabase.storage.from("person-photos").getPublicUrl(p.photo_path!).data.publicUrl,
-      }));
-
-    if (withPhotos.length === 0) {
-      toast.error("No person photos in database to compare against");
-      setScanning(false);
-      stopTimer();
-      return;
-    }
-
-    setProgress(20);
-    setStatusText(`Matching against ${withPhotos.length} photos…`);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("face-match", {
-        body: { capturedImage: captured, personPhotos: withPhotos },
-      });
-
-      stopTimer();
-
-      if (error) {
-        toast.error("Scan failed: " + error.message);
-        setScanning(false);
-        return;
-      }
-
-      if (data?.error) {
-        toast.error(data.error);
-        setScanning(false);
-        return;
-      }
-
-      setProgress(95);
-      setStatusText("Processing results…");
-
-      const matchedIds: string[] = data?.matchedIds || [];
-      const stats = data?.stats;
-
-      if (matchedIds.length === 0) {
-        toast.info("No matching persons found");
-      } else {
-        const statsMsg = stats
-          ? ` (scanned ${stats.totalPhotos}, ${stats.pass1Candidates} candidates, ${stats.finalMatches} confirmed)`
-          : "";
-        toast.success(`Found ${matchedIds.length} match(es)${statsMsg}`);
-      }
-
-      const matched = allPersons.filter((p) => matchedIds.includes(p.id));
-      onMatchResults(matched);
-      setProgress(100);
-      onOpenChange(false);
-    } catch (e: any) {
-      stopTimer();
-      toast.error("Scan error: " + (e?.message || "Unknown error"));
-    } finally {
-      setScanning(false);
-    }
-  };
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -303,9 +229,6 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
               <div className="flex gap-2">
                 <Button variant="outline" onClick={retake} disabled={scanning}>
                   <RotateCcw className="mr-1 h-4 w-4" /> Retake
-                </Button>
-                <Button onClick={scan} disabled={scanning}>
-                  {scanning ? "Scanning…" : "Scan & Match"}
                 </Button>
               </div>
             </>
