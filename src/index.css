@@ -103,3 +103,28 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  header, nav, .print-hide {
+    display: none !important;
+  }
+  #sheet-table {
+    box-shadow: none !important;
+    border: none !important;
+  }
+  #sheet-table table {
+    font-size: 11px;
+  }
+  #sheet-table th, #sheet-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid #ddd;
+  }
+}

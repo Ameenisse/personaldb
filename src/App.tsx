@@ -8,6 +8,7 @@ import PinScreen from "./pages/PinScreen";
 import AdminLogin from "./pages/AdminLogin";
 import LandingPage from "./pages/LandingPage";
 import CompletedPage from "./pages/CompletedPage";
+import GenerateSheetPage from "./pages/GenerateSheetPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +43,7 @@ const AppRoutes = () => (
     <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
       <Route path="/" element={<LandingPage />} />
       <Route path="/completed" element={<CompletedPage />} />
+      <Route path="/generate-sheet" element={<GenerateSheetPage />} />
     </Route>
     <Route path="*" element={<NotFound />} />
   </Routes>
