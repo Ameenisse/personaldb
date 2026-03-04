@@ -84,12 +84,78 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     return canvas.toDataURL("image/jpeg", 0.7);
   };
 
+  const scanWithImage = useCallback(async (imageData: string) => {
+    setScanning(true);
+    setProgress(5);
+    setElapsed(0);
+    setStatusText("Preparing…");
+
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.round((Date.now() - startTime) / 1000));
+    }, 500);
+
+    const withPhotos = allPersons
+      .filter((p) => p.photo_path)
+      .map((p) => ({
+        id: p.id,
+        photoUrl: supabase.storage.from("person-photos").getPublicUrl(p.photo_path!).data.publicUrl,
+      }));
+
+    if (withPhotos.length === 0) {
+      toast.error("No person photos in database to compare against");
+      setScanning(false);
+      stopTimer();
+      return;
+    }
+
+    setProgress(20);
+    setStatusText(`Matching against ${withPhotos.length} photos…`);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("face-match", {
+        body: { capturedImage: imageData, personPhotos: withPhotos },
+      });
+
+      stopTimer();
+
+      if (error) { toast.error("Scan failed: " + error.message); setScanning(false); return; }
+      if (data?.error) { toast.error(data.error); setScanning(false); return; }
+
+      setProgress(95);
+      setStatusText("Processing results…");
+
+      const matchedIds: string[] = data?.matchedIds || [];
+      const stats = data?.stats;
+
+      if (matchedIds.length === 0) {
+        toast.info("No matching persons found");
+      } else {
+        const statsMsg = stats
+          ? ` (${stats.totalPhotos} photos, ${stats.finalMatches} confirmed)`
+          : "";
+        toast.success(`Found ${matchedIds.length} match(es)${statsMsg}`);
+      }
+
+      const matched = allPersons.filter((p) => matchedIds.includes(p.id));
+      onMatchResults(matched);
+      setProgress(100);
+      onOpenChange(false);
+    } catch (e: any) {
+      stopTimer();
+      toast.error("Scan error: " + (e?.message || "Unknown error"));
+    } finally {
+      setScanning(false);
+    }
+  }, [allPersons, onMatchResults, onOpenChange, stopTimer]);
+
   const capture = () => {
     const video = videoRef.current;
     if (!video) return;
     const img = resizeToCanvas(video);
     setCaptured(img);
     stopCamera();
+    setTimeout(() => scanWithImage(img), 100);
   };
 
   const retake = () => {
@@ -105,7 +171,11 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => setCaptured(resizeToCanvas(img));
+      img.onload = () => {
+        const dataUrl = resizeToCanvas(img);
+        setCaptured(dataUrl);
+        setTimeout(() => scanWithImage(dataUrl), 100);
+      };
       img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
