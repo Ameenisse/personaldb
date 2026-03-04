@@ -79,6 +79,28 @@ const CameraScanDialog = ({ open, onOpenChange, allPersons, onMatchResults }: Ca
     // camera will restart via useEffect
   };
 
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    stopCamera();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const maxDim = 400;
+        const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setCaptured(canvas.toDataURL("image/jpeg", 0.8));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const scan = async () => {
     if (!captured) return;
     setScanning(true);
