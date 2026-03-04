@@ -37,7 +37,8 @@ async function runBatch(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
+      model: "google/gemini-2.5-flash-lite",
+      max_tokens: 200,
       messages: [
         {
           role: "system",
