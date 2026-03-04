@@ -73,6 +73,7 @@ const LandingPage = () => {
     setFilters({ id: "", name: "", building: "", atoll: "", island: "", phone: "" });
     setSearched(false);
     setSelected(null);
+    setCameraMatchIds(null);
   };
 
   const handleAtollChange = (v: string) => {
