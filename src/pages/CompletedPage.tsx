@@ -35,12 +35,25 @@ const CompletedPage = () => {
     const idNo = form.id_no.trim();
     if (!idNo) { setExistingId(null); setPhotoPreview(null); setPhoto(null); return; }
     const timeout = setTimeout(async () => {
-      const { data } = await supabase.from("persons").select("id, photo_path").eq("id_no", idNo).maybeSingle();
+      const { data } = await supabase.from("persons").select("*").eq("id_no", idNo).maybeSingle();
       setExistingId(data?.id ?? null);
-      if (data?.photo_path && !photo) {
-        const { data: urlData } = supabase.storage.from("person-photos").getPublicUrl(data.photo_path);
-        if (urlData?.publicUrl) {
-          setPhotoPreview(urlData.publicUrl);
+      if (data) {
+        setForm({
+          id_no: data.id_no,
+          name: data.name || "",
+          dob: data.dob || "",
+          sex: data.sex || "",
+          contact: data.contact || "",
+          building: data.building || "",
+          atoll: data.atoll || "",
+          island: data.island || "",
+          address_full: data.address_full || "",
+        });
+        if (data.photo_path && !photo) {
+          const { data: urlData } = supabase.storage.from("person-photos").getPublicUrl(data.photo_path);
+          if (urlData?.publicUrl) {
+            setPhotoPreview(urlData.publicUrl);
+          }
         }
       }
     }, 300);
