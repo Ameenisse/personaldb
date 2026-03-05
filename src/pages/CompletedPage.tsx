@@ -188,7 +188,12 @@ const CompletedPage = () => {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Person Details</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Person Details</CardTitle>
+            <Button variant="outline" size="sm" onClick={() => { setForm(empty); setExistingId(null); setPhoto(null); setPhotoPreview(null); setRawText(""); }}>
+              <X className="mr-1 h-4 w-4" /> Clear
+            </Button>
+          </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1"><Label>ID No</Label><Input value={form.id_no} onChange={(e) => setField("id_no", e.target.value)} /></div>
             <div className="space-y-1"><Label>Name</Label><Input value={form.name} onChange={(e) => setField("name", e.target.value)} /></div>
