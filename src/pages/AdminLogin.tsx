@@ -16,7 +16,10 @@ const AdminLogin = () => {
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) setError(error.message);
+    if (error) {
+      console.error("Login failed:", error);
+      setError("Invalid email or password.");
+    }
     setLoading(false);
   };
 
