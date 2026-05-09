@@ -63,14 +63,23 @@ const CompletedPage = () => {
   const handlePaste = useCallback((e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
+    const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+    const MAX_SIZE = 5 * 1024 * 1024;
     for (const item of Array.from(items)) {
       if (item.type.startsWith("image/")) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) {
-          setPhoto(file);
-          setPhotoPreview(URL.createObjectURL(file));
+        if (!file) return;
+        if (!ALLOWED.includes(file.type)) {
+          toast({ title: "Invalid file type", description: "Only JPEG, PNG, or WebP images are allowed.", variant: "destructive" });
+          return;
         }
+        if (file.size > MAX_SIZE) {
+          toast({ title: "File too large", description: "Maximum image size is 5 MB.", variant: "destructive" });
+          return;
+        }
+        setPhoto(file);
+        setPhotoPreview(URL.createObjectURL(file));
         return;
       }
     }
