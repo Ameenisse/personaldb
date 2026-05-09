@@ -50,9 +50,9 @@ const CompletedPage = () => {
           address_full: data.address_full || "",
         });
         if (data.photo_path && !photo) {
-          const { data: urlData } = await supabase.storage.from("person-photos").createSignedUrl(data.photo_path, 300);
-          if (urlData?.signedUrl) {
-            setPhotoPreview(urlData.signedUrl);
+          const { data: urlData } = supabase.storage.from("person-photos").getPublicUrl(data.photo_path);
+          if (urlData?.publicUrl) {
+            setPhotoPreview(urlData.publicUrl);
           }
         }
       }
