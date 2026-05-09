@@ -50,9 +50,9 @@ const CompletedPage = () => {
           address_full: data.address_full || "",
         });
         if (data.photo_path && !photo) {
-          const { data: urlData } = supabase.storage.from("person-photos").getPublicUrl(data.photo_path);
-          if (urlData?.publicUrl) {
-            setPhotoPreview(urlData.publicUrl);
+          const { data: urlData } = await supabase.storage.from("person-photos").createSignedUrl(data.photo_path, 300);
+          if (urlData?.signedUrl) {
+            setPhotoPreview(urlData.signedUrl);
           }
         }
       }
@@ -63,14 +63,23 @@ const CompletedPage = () => {
   const handlePaste = useCallback((e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
+    const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+    const MAX_SIZE = 5 * 1024 * 1024;
     for (const item of Array.from(items)) {
       if (item.type.startsWith("image/")) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) {
-          setPhoto(file);
-          setPhotoPreview(URL.createObjectURL(file));
+        if (!file) return;
+        if (!ALLOWED.includes(file.type)) {
+          toast({ title: "Invalid file type", description: "Only JPEG, PNG, or WebP images are allowed.", variant: "destructive" });
+          return;
         }
+        if (file.size > MAX_SIZE) {
+          toast({ title: "File too large", description: "Maximum image size is 5 MB.", variant: "destructive" });
+          return;
+        }
+        setPhoto(file);
+        setPhotoPreview(URL.createObjectURL(file));
         return;
       }
     }
@@ -115,7 +124,8 @@ const CompletedPage = () => {
       // Update existing
       const { error: updateErr } = await supabase.from("persons").update(personData).eq("id", existingId);
       if (updateErr) {
-        toast({ title: "Error", description: updateErr.message, variant: "destructive" });
+        console.error("Update failed:", updateErr);
+        toast({ title: "Error", description: "Unable to save changes. Please try again.", variant: "destructive" });
         setSaving(false);
         return;
       }
@@ -124,7 +134,8 @@ const CompletedPage = () => {
       // Insert new
       const { data: person, error: insertErr } = await supabase.from("persons").insert(personData).select().single();
       if (insertErr || !person) {
-        toast({ title: "Error", description: insertErr?.message || "Insert failed", variant: "destructive" });
+        console.error("Insert failed:", insertErr);
+        toast({ title: "Error", description: "Unable to save record. Please try again.", variant: "destructive" });
         setSaving(false);
         return;
       }
