@@ -124,7 +124,8 @@ const CompletedPage = () => {
       // Update existing
       const { error: updateErr } = await supabase.from("persons").update(personData).eq("id", existingId);
       if (updateErr) {
-        toast({ title: "Error", description: updateErr.message, variant: "destructive" });
+        console.error("Update failed:", updateErr);
+        toast({ title: "Error", description: "Unable to save changes. Please try again.", variant: "destructive" });
         setSaving(false);
         return;
       }
@@ -133,7 +134,8 @@ const CompletedPage = () => {
       // Insert new
       const { data: person, error: insertErr } = await supabase.from("persons").insert(personData).select().single();
       if (insertErr || !person) {
-        toast({ title: "Error", description: insertErr?.message || "Insert failed", variant: "destructive" });
+        console.error("Insert failed:", insertErr);
+        toast({ title: "Error", description: "Unable to save record. Please try again.", variant: "destructive" });
         setSaving(false);
         return;
       }
