@@ -67,12 +67,8 @@ const LandingPage = () => {
 
   useEffect(() => {
     if (!selected?.photo_path) { setPhotoUrl(null); return; }
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase.storage.from("person-photos").createSignedUrl(selected.photo_path!, 300);
-      if (!cancelled) setPhotoUrl(data?.signedUrl ?? null);
-    })();
-    return () => { cancelled = true; };
+    const { data } = supabase.storage.from("person-photos").getPublicUrl(selected.photo_path);
+    setPhotoUrl(data.publicUrl);
   }, [selected]);
 
   const age = selected?.dob ? differenceInYears(new Date(), new Date(selected.dob)) : null;
