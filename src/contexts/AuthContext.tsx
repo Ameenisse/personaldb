@@ -1,54 +1,30 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Session } from "@supabase/supabase-js";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { api, storedSession, SESSION_KEY, SESSION_EXPIRED_EVENT, type RegistrySession } from "@/lib/appsScriptApi";
 
-interface AuthContextType {
-  isPinUnlocked: boolean;
-  setPinUnlocked: (v: boolean) => void;
-  session: Session | null;
-  loading: boolean;
-  logout: () => Promise<void>;
-}
-
+interface AuthContextType { session: RegistrySession | null; login: (pin: string) => Promise<void>; logout: () => void }
 const AuthContext = createContext<AuthContextType | null>(null);
-
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-};
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isPinUnlocked, setIsPinUnlocked] = useState(() => sessionStorage.getItem("isUnlocked") === "true");
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const setPinUnlocked = (v: boolean) => {
-    setIsPinUnlocked(v);
-    if (v) sessionStorage.setItem("isUnlocked", "true");
-    else sessionStorage.removeItem("isUnlocked");
-  };
-
+export function useAuth() {
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("AuthProvider is required");
+  return value;
+}
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [session, setSession] = useState<RegistrySession | null>(storedSession);
+  const clear = useCallback(() => { sessionStorage.removeItem(SESSION_KEY); setSession(null); }, []);
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setPinUnlocked(false);
+    window.addEventListener(SESSION_EXPIRED_EVENT, clear);
+    const timeout = session ? window.setTimeout(clear, Math.max(0, session.expiresAt - Date.now())) : undefined;
+    return () => { window.removeEventListener(SESSION_EXPIRED_EVENT, clear); window.clearTimeout(timeout); };
+  }, [session, clear]);
+  const login = async (pin: string) => {
+    const next = await api.login(pin);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
+    setSession(next);
   };
-
-  return (
-    <AuthContext.Provider value={{ isPinUnlocked, setPinUnlocked, session, loading, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  const logout = () => {
+    const token = session?.token;
+    clear();
+    if (token) void api.logout(token).catch(() => { /* Local logout always succeeds; server token expires. */ });
+  };
+  return <AuthContext.Provider value={{ session, login, logout }}>{children}</AuthContext.Provider>;
+}

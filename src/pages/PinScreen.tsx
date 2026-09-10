@@ -1,52 +1,28 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { LockKeyhole, Loader2 } from "lucide-react";
 
-const VALID_PIN = "1388";
-
-const PinScreen = () => {
+export default function PinScreen() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
-  const { setPinUnlocked } = useAuth();
-  const navigate = useNavigate();
-
-  const handleSubmit = () => {
-    if (pin === VALID_PIN) {
-      setPinUnlocked(true);
-      navigate("/");
-    } else {
-      setError("Wrong PIN");
-      setPin("");
-    }
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setLoading(true); setError("");
+    try { await login(pin); } catch (err) { setError(err instanceof Error ? err.message : "Unable to sign in."); setPin(""); }
+    finally { setLoading(false); }
   };
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Person Registry</CardTitle>
-          <p className="text-sm text-muted-foreground">Enter 4-digit PIN to continue</p>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
-          <InputOTP maxLength={4} value={pin} onChange={(v) => { setPin(v); setError(""); }}>
-            <InputOTPGroup>
-              <InputOTPSlot index={0} />
-              <InputOTPSlot index={1} />
-              <InputOTPSlot index={2} />
-              <InputOTPSlot index={3} />
-            </InputOTPGroup>
-          </InputOTP>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button className="w-full" onClick={handleSubmit} disabled={pin.length !== 4}>
-            Unlock
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default PinScreen;
+  return <main className="flex min-h-screen items-center justify-center bg-background p-4"><section className="w-full max-w-sm rounded-lg border bg-card p-6 shadow-sm">
+    <LockKeyhole className="mx-auto mb-4 h-8 w-8 text-primary" />
+    <h1 className="text-center text-2xl font-bold">Person Registry</h1>
+    <p className="mt-2 text-center text-sm text-muted-foreground">Enter your PIN to continue</p>
+    <form onSubmit={submit} className="mt-6 space-y-4"><Label htmlFor="pin">PIN</Label>
+      <Input id="pin" type="password" inputMode="numeric" pattern="[0-9]{4,12}" minLength={4} maxLength={12} autoFocus autoComplete="current-password" value={pin} disabled={loading} onChange={e => { setPin(e.target.value.replace(/\D/g, "")); setError(""); }} className="text-center text-xl" required />
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <Button type="submit" className="w-full" disabled={pin.length < 4 || loading}>{loading ? <Loader2 className="animate-spin" /> : <LockKeyhole />}{loading ? "Unlocking…" : "Unlock"}</Button>
+    </form>
+  </section></main>;
+}

@@ -65,8 +65,8 @@ export function parsePersonText(raw: string): ParsedPerson {
 
   // Extract ID No
   for (const line of lines) {
-    const idMatch = line.match(/[A-Z]\d{5,8}/);
-    if (idMatch) { id_no = idMatch[0]; break; }
+    const idMatch = line.match(/\b[A-Z]\d{5,8}\b/i);
+    if (idMatch) { id_no = idMatch[0].toUpperCase(); break; }
   }
 
   // Extract Sex
@@ -94,7 +94,7 @@ export function parsePersonText(raw: string): ParsedPerson {
 
   // Extract Contact (supports slash-separated numbers like 9588332/7566376 and dash-formatted like 992-1412)
   // First normalize dash-formatted numbers (e.g. 992-1412 → 9921412)
-  const contactNormalized = raw.replace(/\b(\d{3,5})-(\d{3,5})\b/g, (_, a, b) => a + b);
+  const contactNormalized = lines.join("\n").replace(/\b(\d{3,5})-(\d{3,5})\b/g, (_, a, b) => a + b);
   const slashMatch = contactNormalized.match(/\b(\d{7,10})\s*\/\s*(\d{7,10})\b/);
   if (slashMatch) {
     contact = `${slashMatch[1]} / ${slashMatch[2]}`;
@@ -111,6 +111,7 @@ export function parsePersonText(raw: string): ParsedPerson {
       const cleaned = line.replace(/[\-–—]+\s*$/, "").trim();
       address_full = cleaned;
       const parsed = parseAddress(cleaned);
+       if (!parsed.atoll || !parsed.island) continue;
       building = parsed.building;
       atoll = parsed.atoll;
       island = parsed.island;
@@ -121,7 +122,7 @@ export function parsePersonText(raw: string): ParsedPerson {
   // Extract Name: first line minus age words and id_no
   if (lines.length > 0) {
     name = lines[0]
-      .replace(/[A-Z]\d{5,8}/g, "")
+      .replace(/\b[A-Z]\d{5,8}\b/gi, "")
       .replace(/\b\d+\s*(years?|months?|yrs?|mos?)\b/gi, "")
       .replace(/\s+/g, " ")
       .trim();
