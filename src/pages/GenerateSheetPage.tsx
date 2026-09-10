@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
+import { useMemo, useState } from "react";
+import { usePersons } from "@/contexts/PersonsContext";
+import { DataStatus } from "@/components/DataStatus";
+import { displayDate } from "@/lib/person";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-type Person = Tables<"persons">;
 
 const ATOLLS = ["HA.", "HDH.", "SH.", "N.", "R.", "B.", "LH.", "K.", "AA.", "ADH.", "V.", "M.", "F.", "DH.", "TH.", "L.", "GA.", "GDH.", "GN.", "S."];
 
@@ -33,26 +33,18 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
 ];
 
 const GenerateSheetPage = () => {
-  const [allPersons, setAllPersons] = useState<Person[]>([]);
+  const { persons: allPersons, loading, error } = usePersons();
   const [filters, setFilters] = useState({ atoll: "", island: "", building: "" });
   const [generated, setGenerated] = useState(false);
   const [sortCol, setSortCol] = useState<ColumnKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(new Set(ALL_COLUMNS.map(c => c.key)));
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      const { data } = await supabase.from("persons").select("*").limit(5000);
-      if (data) setAllPersons(data);
-    };
-    fetchAll();
-  }, []);
-
   const islandsForAtoll = useMemo(() => {
-    if (!filters.atoll || filters.atoll === "all") return [];
+    
     const islands = allPersons
-      .filter((p) => p.atoll === filters.atoll && p.island)
-      .map((p) => p.island!.trim())
+      .filter((p) => (!filters.atoll || filters.atoll === "all" || p.atoll === filters.atoll) && p.island)
+      .map((p) => p.island.trim())
       .filter(Boolean);
     return [...new Set(islands)].sort();
   }, [filters.atoll, allPersons]);
@@ -61,10 +53,10 @@ const GenerateSheetPage = () => {
     const buildings = allPersons
       .filter((p) => {
         if (filters.atoll && filters.atoll !== "all" && p.atoll !== filters.atoll) return false;
-        if (filters.island && filters.island !== "all" && !(p.island || "").toLowerCase().includes(filters.island.toLowerCase())) return false;
+        if (filters.island && filters.island !== "all" && p.island !== filters.island) return false;
         return !!p.building;
       })
-      .map((p) => p.building!.trim())
+      .map((p) => p.building.trim())
       .filter(Boolean);
     return [...new Set(buildings)].sort();
   }, [filters.atoll, filters.island, allPersons]);
@@ -74,8 +66,8 @@ const GenerateSheetPage = () => {
     const filtered = allPersons.filter((p) => {
       const f = filters;
       if (f.atoll && f.atoll !== "all" && p.atoll !== f.atoll) return false;
-      if (f.island && f.island !== "all" && !(p.island || "").toLowerCase().includes(f.island.toLowerCase())) return false;
-      if (f.building && !(p.building || "").toLowerCase().includes(f.building.toLowerCase())) return false;
+      if (f.island && f.island !== "all" && p.island !== f.island) return false;
+      if (f.building && f.building !== "all" && p.building !== f.building) return false;
       return true;
     });
     if (!sortCol) return filtered;
@@ -117,7 +109,7 @@ const GenerateSheetPage = () => {
     return results.map((p, i) => {
       const row: Record<string, string | number> = { "#": i + 1 };
       for (const col of getVisibleColumns()) {
-        if (col.key === "dob") row[col.label] = p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : "";
+        if (col.key === "dob") row[col.label] = p.dob ? displayDate(p.dob) : "";
         else row[col.label] = (p[col.key] ?? "") as string;
       }
       return row;
@@ -125,7 +117,7 @@ const GenerateSheetPage = () => {
   };
 
   const handleDownloadPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: visibleCols.size > 5 ? "landscape" : "portrait" });
     doc.setFontSize(14);
     doc.text(`Person Sheet — ${filterLabel}`, 14, 15);
     doc.setFontSize(10);
@@ -134,15 +126,17 @@ const GenerateSheetPage = () => {
     const head = [["#", ...cols.map(c => c.label)]];
     const body = results.map((p, i) => [
       i + 1,
-      ...cols.map(c => c.key === "dob" ? (p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : "") : (p[c.key] ?? "") as string),
+      ...cols.map(c => c.key === "dob" ? (p.dob ? displayDate(p.dob) : "") : (p[c.key] ?? "") as string),
     ]);
-    autoTable(doc, { head, body, startY: 28, styles: { fontSize: 8 } });
+    const css = getComputedStyle(document.documentElement);
+    const rgb = (name: string): [number, number, number] => css.getPropertyValue(name).trim().split(",").map(Number) as [number, number, number];
+    autoTable(doc, { head, body, startY: 28, styles: { fontSize: 8, fillColor: rgb("--export-white"), textColor: rgb("--export-ink") }, headStyles: { fillColor: rgb("--export-light"), textColor: rgb("--export-ink") }, alternateRowStyles: { fillColor: rgb("--export-stripe") } });
     doc.save(`sheet-${filterLabel.replace(/\s*\/\s*/g, "-")}.pdf`);
   };
 
   const handleDownloadExcel = () => {
     const data = getTableData();
-    const ws = XLSX.utils.json_to_sheet(data);
+    const ws = XLSX.utils.json_to_sheet(data, { header: ["#", ...getVisibleColumns().map(c => c.label)] });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet");
     XLSX.writeFile(wb, `sheet-${filterLabel.replace(/\s*\/\s*/g, "-")}.xlsx`);
@@ -159,11 +153,11 @@ const GenerateSheetPage = () => {
   const filterLabel = [
     filters.atoll && filters.atoll !== "all" ? filters.atoll : null,
     filters.island && filters.island !== "all" ? filters.island : null,
-    filters.building || null,
+    filters.building && filters.building !== "all" ? filters.building : null,
   ].filter(Boolean).join(" / ") || "All";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4"><DataStatus />
       {/* Filter controls — hidden when printing */}
       <Card className="print:hidden">
         <CardHeader>
@@ -174,7 +168,7 @@ const GenerateSheetPage = () => {
             <div className="space-y-1">
               <Label>Atoll</Label>
               <Select value={filters.atoll} onValueChange={handleAtollChange}>
-                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectTrigger aria-label="Filter option"><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   {ATOLLS.map((a) => (
@@ -186,7 +180,7 @@ const GenerateSheetPage = () => {
             <div className="space-y-1">
               <Label>Island</Label>
               <Select value={filters.island} onValueChange={handleIslandChange}>
-                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectTrigger aria-label="Filter option"><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   {islandsForAtoll.map((isl) => (
@@ -198,7 +192,7 @@ const GenerateSheetPage = () => {
             <div className="space-y-1">
               <Label>Building</Label>
               <Select value={filters.building} onValueChange={(v) => setFilters((f) => ({ ...f, building: v }))}>
-                <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+                <SelectTrigger aria-label="Filter option"><SelectValue placeholder="All" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All</SelectItem>
                   {buildingsForSelection.map((b) => (
@@ -209,7 +203,7 @@ const GenerateSheetPage = () => {
             </div>
           </div>
            <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setGenerated(true)}><FileText className="mr-1 h-4 w-4" /> Generate</Button>
+            <Button disabled={loading || !!error} onClick={() => setGenerated(true)}><FileText className="mr-1 h-4 w-4" /> Generate</Button>
             <Button variant="outline" onClick={handleReset}><RotateCcw className="mr-1 h-4 w-4" /> Reset</Button>
             {generated && results.length > 0 && (
               <>
@@ -242,7 +236,7 @@ const GenerateSheetPage = () => {
           <CardContent className="p-0 print:p-0">
             {/* Print header */}
             <div className="hidden print:block print:mb-4 print:p-4">
-              <h1 className="text-lg font-bold">Person Sheet — {filterLabel}</h1>
+              <h2 className="text-lg font-bold">Person Sheet — {filterLabel}</h2>
               <p className="text-xs text-muted-foreground">{results.length} records</p>
             </div>
             <Table>
@@ -250,11 +244,11 @@ const GenerateSheetPage = () => {
                <TableRow>
                   <TableHead>#</TableHead>
                   {ALL_COLUMNS.filter(c => visibleCols.has(c.key)).map((col) => (
-                    <TableHead key={col.key} className="cursor-pointer select-none" onClick={() => toggleSort(col.key)}>
-                      <span className="inline-flex items-center gap-1">
+                    <TableHead key={col.key} aria-sort={sortCol === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                      <Button variant="ghost" onClick={() => toggleSort(col.key)} className="px-0">
                         {col.label}
                         {sortCol === col.key ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
-                      </span>
+                      </Button>
                     </TableHead>
                   ))}
                 </TableRow>
@@ -267,7 +261,7 @@ const GenerateSheetPage = () => {
                     <TableCell>{i + 1}</TableCell>
                     {visibleCols.has("id_no") && <TableCell>{p.id_no}</TableCell>}
                     {visibleCols.has("name") && <TableCell>{p.name}</TableCell>}
-                    {visibleCols.has("dob") && <TableCell>{p.dob ? format(parseISO(p.dob), "dd/MM/yyyy") : ""}</TableCell>}
+                    {visibleCols.has("dob") && <TableCell>{p.dob ? displayDate(p.dob) : ""}</TableCell>}
                     {visibleCols.has("sex") && <TableCell>{p.sex || ""}</TableCell>}
                     {visibleCols.has("building") && <TableCell>{p.building || ""}</TableCell>}
                     {visibleCols.has("atoll") && <TableCell>{p.atoll || ""}</TableCell>}

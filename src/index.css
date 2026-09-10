@@ -8,7 +8,11 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 214 30% 96%;
+    --export-white: 255,255,255;
+    --export-light: 233,238,245;
+    --export-stripe: 247,249,251;
+    --export-ink: 25,35,50;
     --foreground: 222.2 84% 4.9%;
 
     --card: 0 0% 100%;
@@ -133,4 +137,12 @@ All colors MUST be HSL.
   #sheet-table tr:nth-child(even) td {
     background-color: #f9f9f9;
   }
+}
+
+@layer base {
+  * { letter-spacing: 0; }
+  input, textarea, select { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
